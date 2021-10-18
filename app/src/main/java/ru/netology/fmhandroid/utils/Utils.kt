@@ -9,6 +9,8 @@ import dagger.hilt.android.qualifiers.ActivityContext
 import retrofit2.Response
 import ru.netology.fmhandroid.R
 import ru.netology.fmhandroid.dto.ClaimComment
+import ru.netology.fmhandroid.dto.ClaimWithCreatorAndExecutor
+import ru.netology.fmhandroid.dto.User
 import ru.netology.fmhandroid.exceptions.ApiException
 import ru.netology.fmhandroid.exceptions.ServerException
 import ru.netology.fmhandroid.exceptions.UnknownException
@@ -17,16 +19,54 @@ import java.text.SimpleDateFormat
 import java.time.*
 import java.time.format.DateTimeFormatter
 import java.util.*
+import ru.netology.fmhandroid.dto.Claim as Claim
 
 object Utils {
 
-    object EmptyComment {
+    object Empty {
         val emptyClaimComment = ClaimComment(
             id = null,
             claimId = null,
             description = "",
             creatorId = null,
             createDate = null,
+        )
+
+        val emptyClaim = ClaimWithCreatorAndExecutor(
+            claim = Claim(
+                id = null,
+                title = null,
+                description = null,
+                creatorId = null,
+                executorId = null,
+                createDate = null,
+                planExecuteDate = null,
+                factExecuteDate = null,
+                status = null,
+                deleted = false
+            ),
+            executor = User(
+                id = null,
+                login = null,
+                password = null,
+                firstName = null,
+                lastName = null,
+                middleName = null,
+                phoneNumber = null,
+                email = null,
+                deleted = false,
+            ),
+            creator = User(
+                id = null,
+                login = null,
+                password = null,
+                firstName = null,
+                lastName = null,
+                middleName = null,
+                phoneNumber = null,
+                email = null,
+                deleted = false,
+            )
         )
     }
 

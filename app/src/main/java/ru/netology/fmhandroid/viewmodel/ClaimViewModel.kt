@@ -1,13 +1,20 @@
 package ru.netology.fmhandroid.viewmodel
 
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import ru.netology.fmhandroid.dto.*
+import ru.netology.fmhandroid.model.ClaimStateModel
 import ru.netology.fmhandroid.repository.claimRepository.ClaimRepository
 import ru.netology.fmhandroid.utils.Events
+import ru.netology.fmhandroid.utils.Utils
 import javax.inject.Inject
 
 @HiltViewModel
@@ -16,7 +23,16 @@ class ClaimViewModel @Inject constructor(
 ) : ViewModel() {
 
     lateinit var commentsData: Flow<List<ClaimCommentWithCreator>>
-    lateinit var dataClaim: Flow<ClaimWithCreatorAndExecutor>
+
+    private val _state = MutableLiveData(
+        ClaimStateModel(
+            loading = true,
+            claim = Utils.Empty.emptyClaim
+        )
+    )
+
+    val stateClaim: LiveData<ClaimStateModel>
+        get() = _state
 
     val claimCreatedEvent = Events()
     val claimCommentCreatedEvent = Events()
@@ -85,6 +101,7 @@ class ClaimViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 claimRepository.editClaim(updatedClaim)
+                getClaimById(updatedClaim.id!!)
                 Events.produceEvents(claimUpdatedEvent)
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -106,16 +123,12 @@ class ClaimViewModel @Inject constructor(
         }
     }
 
-    fun getClaimById(claimId: Int) {
-        viewModelScope.launch {
-            try {
-                claimRepository.getClaimById(claimId)
-                dataClaim = claimRepository.dataClaim
-                Events.produceEvents(claimLoadedEvent)
-            } catch (e: Exception) {
-                e.printStackTrace()
-                Events.produceEvents(loadClaimExceptionEvent)
-            }
+    fun getClaimById(claimId: Int) = viewModelScope.launch {
+        try {
+            _state.value = ClaimStateModel(loading = true)
+            _state.value = ClaimStateModel(claimRepository.getClaimById(claimId))
+        } catch (e: Exception) {
+            _state.value = ClaimStateModel(error = true, claim = Utils.Empty.emptyClaim)
         }
     }
 
@@ -124,7 +137,7 @@ class ClaimViewModel @Inject constructor(
         newClaimStatus: Claim.Status,
         executorId: Int?,
         claimComment: ClaimComment
-    ) {
+    ) =
         viewModelScope.launch {
             try {
                 claimRepository.changeClaimStatus(
@@ -133,15 +146,15 @@ class ClaimViewModel @Inject constructor(
                     executorId,
                     claimComment
                 )
-                dataClaim = claimRepository.dataClaim
-                Events.produceEvents(claimStatusChangedEvent)
+
                 if (!claimComment.description.isNullOrBlank()) {
                     commentsData = claimRepository.dataComments
                 }
+                getClaimById(claimId)
             } catch (e: Exception) {
                 e.printStackTrace()
-                Events.produceEvents(claimStatusChangeExceptionEvent)
+                _state.value = ClaimStateModel(error = true)
             }
         }
-    }
+
 }

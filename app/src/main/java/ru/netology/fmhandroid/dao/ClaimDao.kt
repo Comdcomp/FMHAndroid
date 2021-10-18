@@ -38,7 +38,7 @@ interface ClaimDao {
     suspend fun insertClaim(claims: List<ClaimEntity>)
 
     @Query("SELECT * FROM ClaimEntity WHERE id = :id")
-    fun getClaimById(id: Int): Flow<ClaimWithCreatorAndExecutor>
+    fun getClaimById(id: Int): ClaimWithCreatorAndExecutor
 
     @Query("UPDATE ClaimEntity Set deleted = 1 WHERE id = :id")
     suspend fun deleteClaimById(id: Int)

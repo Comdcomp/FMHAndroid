@@ -1,15 +1,13 @@
 package ru.netology.fmhandroid.repository.claimRepository
 
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.transform
+import kotlinx.coroutines.flow.*
 import ru.netology.fmhandroid.api.ClaimApi
 import ru.netology.fmhandroid.dao.ClaimDao
 import ru.netology.fmhandroid.dao.UserDao
 import ru.netology.fmhandroid.dto.*
 import ru.netology.fmhandroid.entity.toEntity
+import ru.netology.fmhandroid.model.ClaimStateModel
 import ru.netology.fmhandroid.utils.Utils.makeRequest
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -32,7 +30,6 @@ class ClaimRepositoryImpl @Inject constructor(
             .flowOn(Dispatchers.Default)
 
     override lateinit var dataComments: Flow<List<ClaimCommentWithCreator>>
-    override lateinit var dataClaim: Flow<ClaimWithCreatorAndExecutor>
 
     override suspend fun getAllClaims(): List<Claim> {
         return makeRequest(
@@ -48,15 +45,6 @@ class ClaimRepositoryImpl @Inject constructor(
         request = { claimApi.updateClaim(editedClaim) },
         onSuccess = { body ->
             claimDao.insertClaim(body.toEntity())
-            dataClaim = dataClaim.map {
-                ClaimWithCreatorAndExecutor(
-                    claim = editedClaim,
-                    executor = editedClaim.executorId?.let { userId ->
-                        userDao.getUserById(userId).toDto()
-                    },
-                    creator = it.creator
-                )
-            }
             body
         }
     )
@@ -69,11 +57,12 @@ class ClaimRepositoryImpl @Inject constructor(
         }
     )
 
-    override suspend fun getClaimById(id: Int) {
+    override fun getClaimById(id: Int): ClaimWithCreatorAndExecutor {
         try {
-            dataClaim = claimDao.getClaimById(id)
+            return claimDao.getClaimById(id)
         } catch (e: Exception) {
             e.printStackTrace()
+            throw e
         }
     }
 
@@ -121,15 +110,7 @@ class ClaimRepositoryImpl @Inject constructor(
             },
             onSuccess = { body ->
                 claimDao.insertClaim(body.toEntity())
-                dataClaim = dataClaim.map {
-                    ClaimWithCreatorAndExecutor(
-                        claim = body,
-                        executor = executorId?.let { userId ->
-                            userDao.getUserById(userId).toDto()
-                        },
-                        creator = it.creator
-                    )
-                }
+
                 if (!claimComment.description.isNullOrBlank()) {
                     claimDao.insertComment(claimComment.toEntity())
                     dataComments.map { list ->

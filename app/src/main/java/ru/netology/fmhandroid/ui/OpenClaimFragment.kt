@@ -51,6 +51,7 @@ class OpenClaimFragment : Fragment() {
         val claim = args.argClaim
 
         var tempExecutorId: Int? = claim.claim.executorId
+        var actualStatus: Claim.Status = claim.claim.status!!
 
         // Временная переменная. После авторизации заменить на залогиненного юзера
         val user = User(
@@ -79,7 +80,7 @@ class OpenClaimFragment : Fragment() {
         val statusProcessingMenu = PopupMenu(context, binding.statusProcessingImageButton)
         statusProcessingMenu.inflate(R.menu.menu_claim_status_processing)
 
-        statusMenuVisibility(claim.claim.status!!, statusProcessingMenu)
+        statusMenuVisibility(actualStatus, statusProcessingMenu)
         statusProcessingMenu.setOnMenuItemClickListener { menuItem ->
             when (menuItem.itemId) {
                 R.id.take_to_work_list_item -> {
@@ -88,7 +89,7 @@ class OpenClaimFragment : Fragment() {
                         claimId = claim.claim.id!!,
                         newClaimStatus = Claim.Status.IN_PROGRESS,
                         executorId = user.id,
-                        claimComment = Utils.EmptyComment.emptyClaimComment
+                        claimComment = Utils.Empty.emptyClaimComment
                     )
 
                     lifecycleScope.launch {
@@ -100,26 +101,24 @@ class OpenClaimFragment : Fragment() {
                                 }
                             }
 
-                            viewModel.dataClaim.collect {
-                                binding.statusLabelTextView.text =
-                                    displayingStatusOfClaim(it.claim.status!!)
-                                statusMenuVisibility(
-                                    it.claim.status!!,
-                                    statusProcessingMenu
+                            binding.statusLabelTextView.text =
+                                displayingStatusOfClaim(Claim.Status.IN_PROGRESS)
+
+                            statusMenuVisibility(
+                                Claim.Status.IN_PROGRESS,
+                                statusProcessingMenu
+                            )
+
+                            binding.executorNameTextView.text =
+                                Utils.fullUserNameGenerator(
+                                    user.lastName.toString(),
+                                    user.firstName.toString(),
+                                    user.middleName.toString()
                                 )
-                                binding.executorNameTextView.text = if (it.executor != null) {
-                                    Utils.fullUserNameGenerator(
-                                        it.executor.lastName.toString(),
-                                        it.executor.firstName.toString(),
-                                        it.executor.middleName.toString()
-                                    )
-                                } else {
-                                    getString(R.string.not_assigned)
-                                }
-                                binding.editProcessingImageButton.setImageResource(R.drawable.ic_edit_non_clickable)
-                                binding.editProcessingImageButton.isClickable = false
-                                tempExecutorId = user.id
-                            }
+                            binding.editProcessingImageButton.setImageResource(R.drawable.ic_edit_non_clickable)
+                            binding.editProcessingImageButton.isClickable = false
+                            tempExecutorId = user.id
+                            actualStatus = Claim.Status.IN_PROGRESS
                         }
                     }
                     true
@@ -137,7 +136,7 @@ class OpenClaimFragment : Fragment() {
                             claim.claim.id!!,
                             Claim.Status.CANCELLED,
                             executorId = null,
-                            claimComment = Utils.EmptyComment.emptyClaimComment
+                            claimComment = Utils.Empty.emptyClaimComment
                         )
                         Events.events.collect { event ->
                             when (event) {
@@ -147,24 +146,26 @@ class OpenClaimFragment : Fragment() {
                                 }
                             }
 
-                            viewModel.dataClaim.collect {
-                                binding.statusLabelTextView.text =
-                                    displayingStatusOfClaim(it.claim.status!!)
-                                statusMenuVisibility(
-                                    it.claim.status!!,
-                                    statusProcessingMenu
-                                )
-                                binding.executorNameTextView.text = if (it.executor != null) {
-                                    Utils.fullUserNameGenerator(
-                                        it.executor.lastName.toString(),
-                                        it.executor.firstName.toString(),
-                                        it.executor.middleName.toString()
-                                    )
-
-                                } else {
-                                    getString(R.string.not_assigned)
-                                }
-                            }
+//                            viewModel.stateClaim.collect {
+//
+//                                binding.statusLabelTextView.text =
+//                                    displayingStatusOfClaim(it.claim.status!!)
+//                                statusMenuVisibility(
+//                                    it.claim.status!!,
+//                                    statusProcessingMenu
+//                                )
+//                                binding.executorNameTextView.text =
+//                                    if (it.executor != null) {
+//                                        Utils.fullUserNameGenerator(
+//                                            it.executor.lastName.toString(),
+//                                            it.executor.firstName.toString(),
+//                                            it.executor.middleName.toString()
+//                                        )
+//
+//                                    } else {
+//                                        getString(R.string.not_assigned)
+//                                    }
+//                            }
                         }
                     }
                     true
@@ -181,6 +182,8 @@ class OpenClaimFragment : Fragment() {
                             hint = "Description",
                             isMultiline = true
                         )
+                        dialog.show(parentFragmentManager, "CreateCommentDialog")
+
                         dialog.onOk = {
                             val text = dialog.editText.text
                             if (text.isNotBlank()) {
@@ -190,7 +193,7 @@ class OpenClaimFragment : Fragment() {
                                     executorId = null,
                                     claimComment = ClaimComment(
                                         claimId = claim.claim.id,
-                                        description = text.toString(),
+                                        description = text.trim().toString(),
                                         creatorId = user.id,
                                         createDate = LocalDateTime.now()
                                             .toEpochSecond(
@@ -201,46 +204,40 @@ class OpenClaimFragment : Fragment() {
                                     )
                                 )
                                 tempExecutorId = null
-                                dialog.dismiss()
+                                dialog.onDestroy()
                             } else {
                                 showErrorToast(R.string.toast_empty_field)
                             }
                         }
-                        dialog.show(parentFragmentManager, "CreateCommentDialog")
-                    }
 
-
-                    lifecycleScope.launchWhenResumed {
-                        Events.events.collect { event ->
-                            when (event) {
-                                viewModel.claimStatusChangeExceptionEvent -> {
-                                    showErrorToast(R.string.error)
-                                    return@collect
-                                }
+                        viewModel.stateClaim.observe(viewLifecycleOwner, {
+                            if(it.error) {
+                                showErrorToast(R.string.error)
+                                return@observe
                             }
 
-                            viewModel.dataClaim.collect {
-                                binding.statusLabelTextView.text =
-                                    displayingStatusOfClaim(it.claim.status!!)
+                            binding.statusLabelTextView.text =
+                                displayingStatusOfClaim(claim.claim.status!!)
 
-                                statusMenuVisibility(
-                                    it.claim.status!!,
-                                    statusProcessingMenu
-                                )
+                            statusMenuVisibility(
+                                claim.claim.status!!,
+                                statusProcessingMenu
+                            )
 
-                                binding.executorNameTextView.text = if (it.executor != null) {
+                            binding.executorNameTextView.text =
+                                if (claim.executor != null) {
                                     Utils.fullUserNameGenerator(
-                                        it.executor.lastName.toString(),
-                                        it.executor.firstName.toString(),
-                                        it.executor.middleName.toString()
+                                        claim.executor.lastName.toString(),
+                                        claim.executor.firstName.toString(),
+                                        claim.executor.middleName.toString()
                                     )
                                 } else {
-                                    getString(R.string.not_assigned)
+                                    getText(R.string.not_assigned)
                                 }
-                                binding.editProcessingImageButton.setImageResource(R.drawable.ic_edit)
-                                binding.editProcessingImageButton.isClickable = true
-                            }
-                        }
+
+                            binding.editProcessingImageButton.setImageResource(R.drawable.ic_edit)
+                            binding.editProcessingImageButton.isClickable = true
+                        })
                     }
                     true
                 }
@@ -263,7 +260,7 @@ class OpenClaimFragment : Fragment() {
                                 viewModel.changeClaimStatus(
                                     claim.claim.id!!,
                                     Claim.Status.EXECUTED,
-                                    executorId = claim.executor?.id,
+                                    executorId = tempExecutorId,
                                     claimComment = ClaimComment(
                                         claimId = claim.claim.id,
                                         description = text.toString(),
@@ -282,7 +279,7 @@ class OpenClaimFragment : Fragment() {
                         }
                         dialog.show(parentFragmentManager, "CreateCommentDialog")
 
-                        lifecycleScope.launchWhenResumed {
+                        lifecycleScope.launch {
                             Events.events.collect { event ->
                                 when (event) {
                                     viewModel.claimStatusChangeExceptionEvent -> {
@@ -291,23 +288,24 @@ class OpenClaimFragment : Fragment() {
                                     }
                                 }
 
-                                viewModel.dataClaim.collect {
-                                    binding.statusLabelTextView.text =
-                                        displayingStatusOfClaim(it.claim.status!!)
-                                    statusMenuVisibility(
-                                        it.claim.status!!,
-                                        statusProcessingMenu
-                                    )
-                                    binding.executorNameTextView.text = if (it.executor != null) {
-                                        Utils.fullUserNameGenerator(
-                                            it.executor.lastName.toString(),
-                                            it.executor.firstName.toString(),
-                                            it.executor.middleName.toString()
-                                        )
-                                    } else {
-                                        getString(R.string.not_assigned)
-                                    }
-                                }
+//                                viewModel.stateClaim.collect {
+//                                    binding.statusLabelTextView.text =
+//                                        displayingStatusOfClaim(it.claim.status!!)
+//                                    statusMenuVisibility(
+//                                        it.claim.status!!,
+//                                        statusProcessingMenu
+//                                    )
+//                                    binding.executorNameTextView.text =
+//                                        if (it.executor != null) {
+//                                            Utils.fullUserNameGenerator(
+//                                                it.executor.lastName.toString(),
+//                                                it.executor.firstName.toString(),
+//                                                it.executor.middleName.toString()
+//                                            )
+//                                        } else {
+//                                            getString(R.string.not_assigned)
+//                                        }
+//                                }
                             }
                         }
                     }
@@ -338,7 +336,7 @@ class OpenClaimFragment : Fragment() {
             planeDateTextView.text =
                 claim.claim.planExecuteDate?.let { Utils.showDateTimeInOne(it) }
 
-            statusLabelTextView.text = displayingStatusOfClaim(claim.claim.status!!)
+            statusLabelTextView.text = displayingStatusOfClaim(actualStatus)
 
             descriptionTextView.text = claim.claim.description
             authorNameTextView.text = Utils.fullUserNameGenerator(
@@ -398,52 +396,56 @@ class OpenClaimFragment : Fragment() {
             Events.events.collect {
                 viewModel.claimCommentUpdatedEvent
                 viewModel.commentsData.collect {
-                    adapter.submitList(it)
+                    adapter.submitList(it.takeLast(1))
                 }
             }
         }
 
         lifecycleScope.launch {
             viewModel.commentsData.collect {
-                adapter.submitList(it)
+                adapter.submitList(it.takeLast(1))
             }
         }
 
         lifecycleScope.launchWhenResumed {
             Events.events.collect { event ->
-                when(event) {
+                when (event) {
                     viewModel.claimUpdatedEvent -> {
-                        viewModel.dataClaim.collect { updated ->
+                        viewModel.stateClaim.observe(viewLifecycleOwner, {
                             binding.apply {
-                                titleTextView.text = updated.claim.title
-                                executorNameTextView.text = if (updated.executor != null) {
+                                titleTextView.text = it.claim.claim.title
+                                executorNameTextView.text = if (it.claim.executor != null) {
                                     Utils.fullUserNameGenerator(
-                                        updated.executor.lastName.toString(),
-                                        updated.executor.firstName.toString(),
-                                        updated.executor.middleName.toString()
+                                        it.claim.executor.lastName.toString(),
+                                        it.claim.executor.firstName.toString(),
+                                        it.claim.executor.middleName.toString()
                                     )
                                 } else {
                                     getText(R.string.not_assigned)
                                 }
 
                                 planeDateTextView.text =
-                                    updated.claim.planExecuteDate?.let {
+                                    it.claim.claim.planExecuteDate?.let {
                                         Utils.showDateTimeInOne(
                                             it
                                         )
                                     }
                                 statusLabelTextView.text =
-                                    displayingStatusOfClaim(updated.claim.status!!)
-                                descriptionTextView.text = updated.claim.description
+                                    displayingStatusOfClaim(it.claim.claim.status!!)
+                                descriptionTextView.text = it.claim.claim.description
                                 authorNameTextView.text = Utils.fullUserNameGenerator(
-                                    updated.creator.lastName.toString(),
-                                    updated.creator.firstName.toString(),
-                                    updated.creator.middleName.toString()
+                                    it.claim.creator.lastName.toString(),
+                                    it.claim.creator.firstName.toString(),
+                                    it.claim.creator.middleName.toString()
                                 )
                                 createDataTextView.text =
-                                    updated.claim.createDate?.let { Utils.showDateTimeInOne(it) }
+                                    it.claim.claim.createDate?.let {
+                                        Utils.showDateTimeInOne(
+                                            it
+                                        )
+                                    }
                             }
-                        }
+                        })
                     }
                 }
             }

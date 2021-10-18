@@ -1,9 +1,10 @@
 package ru.netology.fmhandroid.utils
 
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.*
 
-class Events{
+class Events {
 
     companion object {
         private val mutableEvents = MutableSharedFlow<Events>()
